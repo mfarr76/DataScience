@@ -1,6 +1,6 @@
 install.packages("NHANES")
 install.packages("dplyr")
-
+rm(list = ls())
 
 library(dplyr)
 library(ggplot2)
@@ -27,6 +27,8 @@ homes <- NHANES %>%
   select(Gender, HomeOwn) %>%
   filter(HomeOwn %in% c("Own", "Rent"))
 
+unique(NHANES$HomeOwn)
+
 ggplot(NHANES, aes(x = Gender, fill = HomeOwn)) + 
   geom_bar(position = "fill") +
   ylab("Relative frequencies")
@@ -42,6 +44,7 @@ homes %>%
 HomeOwn_perm = sample(NHANES$HomeOwn)
 (x1 <- 1:20)
 sample(x1)
+diff(x1)
 
 homeown_perm <- homes %>%
   rep_sample_n(size = nrow(homes), reps = 100) %>%
@@ -55,6 +58,21 @@ homeown_perm <- homes %>%
 # Dotplot of 100 permuted differences in proportions
 ggplot(homeown_perm, aes(x = diff_perm)) + 
   geom_dotplot(binwidth = .001)
+
+
+# Perform 1000 permutations
+homeown_perm <- homes %>%
+  rep_sample_n(size = nrow(homes), reps = 1000) %>%
+  mutate(HomeOwn_perm = sample(HomeOwn)) %>%
+  group_by(replicate, Gender) %>%
+  summarize(prop_own_perm = mean(HomeOwn_perm == "Own"), 
+            prop_own = mean(HomeOwn == "Own")) %>%
+  summarize(diff_perm = diff(prop_own_perm),
+            diff_orig = diff(prop_own)) # male - female
+
+# Density plot of 1000 permuted differences in proportions
+ggplot(homeown_perm, aes(x = diff_perm)) + 
+  geom_density()
 
 
 disc <- data.frame(
