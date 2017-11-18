@@ -14,7 +14,7 @@ library(corrplot)
 
 
 
-karnes <- read.csv("Karnes_data.csv")
+karnes <- read.csv("Karnes_data.csv", stringsAsFactors = FALSE)
 karnes$DateProductionStart <- as.Date(karnes$DateProductionStart, "%m/%d/%Y")
 
 ###--------------------------added from kaggle site----------------------------
@@ -24,26 +24,18 @@ Num_NA <- sapply( karnes,function( y ) length( which( is.na ( y ) == TRUE )))
 (NA_Count<- data.frame( Item = colnames ( karnes ) ,Count = Num_NA ))
 
 
-
+##check for NA
 a <- is.na(karnes)
-# Set to 0 as an imputation
+## Set to 0 if NA
 karnes[a] <-0
 
-karnes1 <- karnes %>%
-  select(PerfIntervalGross_CLEAN, LBS_FT_CLEAN, BBL_FT_CLEAN, 
-         IPLiquid, CUM6Liquid, CUM12Liquid, Lon, Lat, GOR_6M, 
-         LBS_GAL, Spacing_Avg)
+##conver cols to numeric if they are interger
+karnes <- mutate_if(karnes, is.integer, as.numeric)
 
 
-karnes1 <- as.data.frame(sapply(karnes1,as.numeric))
-write.csv(karnes1, file = "karnes1.csv")
-
-cov(karnes1$PerfIntervalGross_CLEAN, karnes1$IPLiquid)
-cor(karnes1$PerfIntervalGross_CLEAN, karnes1$IPLiquid)
-
-correlate <- cor( karnes1, use = "everything" )
-corrplot(correlations, method="circle", type="lower",  sig.level = 0.01, insig = "blank")
-corrplot(correlations, method = "ellipse")
+correlate <- cor( karnes_numeric, use = "everything" )
+corrplot(correlate, method="circle", type="lower",  sig.level = 0.01, insig = "blank")
+corrplot(correlate, method = "ellipse")
 cor.test(karnes1$CUM12Liquid, karnes1$LBS_FT_CLEAN)
 summary(lm(IPLiquid ~ PerfIntervalGross_CLEAN, data = karnes1))
 
