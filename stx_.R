@@ -18,30 +18,49 @@ library(statisticalModeling)
 #chr_names <- list("API", "OperatorName", "WellName", "CountyName", "TOE_UP_DWN", "Spacing_Categor")
 
 stx <- fread("stxDataset.csv")
-glimpse(stx)
+#rowcount
+stx <- mutate(stx, id = as.factor(1:n()))
+#glimpse(stx)
 #names(stx)
 
-##remove (,) example 1,000 
-stx <- data.frame(lapply(stx, gsub, pattern = ',', replacement = '', fixed = TRUE))
-##convert to date
-stx$DateProductionStart <- as.Date(stx$DateProductionStart, "%m/%d/%Y")
-##list of chr strings
-i <- grep("API|OperatorName|WellName|CountyName|TOE_UP_DWN|Spacing_Categor", colnames(stx))
-##conver to chr
-stx[, i] <- apply(stx[,i], 2, as.character)
-##colnames that are factors
-fact_list <- lapply(stx, class) == "factor"
-##conver factors to numeric
-stx[fact_list] <- sapply(stx[fact_list], function(x) as.numeric(levels(x))[x])
+##count NA
+sapply(stx, function(x) sum(is.na(x)))
 
+##count NA function
 count_NA <- function(x){
   count_tbl <- sapply( x , function( y ) length ( which ( is.na (y) == TRUE)))
   dt_count <- data.frame( Item = colnames(x), Count = count_tbl)
   return(dt_count)
 }
 
+col_num <- c("API","OperatorName","WellName","CountyName","TOE_UP_DWN","Spacing_Category")
+stx_num <- stx[,!colnames(stx) %in% col_num]
+col_chr <- c("API","OperatorName","WellName","CountyName","TOE_UP_DWN","Spacing_Category", "id")
+stx_chr <- stx[,colnames(stx) %in% col_chr]
+stx_chr[] <- lapply(stx_chr, as.factor)
 
+##remove (,) example 1,000 
+stx_num <- data.frame(lapply(stx_num, gsub, pattern = ',', replacement = '', fixed = TRUE))
+##convert to date
+stx_num$DateProductionStart <- as.Date(stx_num$DateProductionStart, "%m/%d/%Y")
+##colnames that are factors
+fact_list <- lapply(stx_num, class) == "factor"
+##conver factors to numeric
+stx_num[fact_list] <- sapply(stx_num[fact_list], function(x) as.numeric(levels(x))[x])
 
+##list of chr strings
+#i <- grep("API|OperatorName|WellName|CountyName|TOE_UP_DWN|Spacing_Categor", colnames(stx))
+##conver to chr
+#stx[, i] <- apply(stx[,i], 2, as.character)
+stx_num$id <- as.factor(stx_num$id)
+
+stx <- left_join(stx_chr, stx_num, by = "id")
+
+stx_sm <- filter(stx, OperatorName == "SM ENERGY COMPANY", 
+                 Spacing_Category == "Bounded", 
+                 CountyName == "WEBB", 
+                 str_detect(WellName, 'GAL')) 
+                  
 ##select only numeric columns and create new data table
 stx_num <- select_if(stx, is.numeric)
 
@@ -72,7 +91,7 @@ cor_na_rm <- cor(stx_num_removeNA)
 cor_na_rm - cor_NA
 ####----------------------------------------------------------------
 
-stx_12 <- stx %>%
+stx_12 <- stx_sm %>%
   filter(!is.na(First12MonthGas),
          !is.na(SoPhiH_LEF), 
          Spacing_Category == "Bounded", 
@@ -84,14 +103,21 @@ stx_12 <- stx %>%
   select(OperatorName, TOE_UP_DWN, FluidAmountTotal, ProppantAmountTotal, SoPhiH_LEF, 
          Spacing_Category, Spacing_Avg, First12MonthGas, First12MonthLiquid,
          Cum12Gas_MMcf, Cum12Oil_Mbo, Cum12_MBoe)
-write.csv(stx_12, file = "stx_12.csv")
+#write.csv(stx_12, file = "stx_12.csv")
 
+
+##select only numeric columns and create new data table
+stx_cor <- select_if(stx_12, is.numeric)
+
+correlate <- cor( stx_cor, use = "everything" )
+corrplot(correlate, method="circle", type="lower",  sig.level = 0.01, insig = "blank")
 
 summary(stx_12$FluidAmountTotal)
 
 stx_12op <- stx_12 %>%
   group_by(OperatorName) %>%
   summarise_all(mean)
+
 
 
 ggplot(stx_12, aes(OperatorName)) + 
@@ -103,8 +129,8 @@ ggplot(stx_12, aes(First12MonthGas)) +
   geom_density(aes( fill = factor(CountyName)), size = 1) + 
   labs(Title = "Denisty Plot")
 
-ggplot(stx_12, aes(factor(OperatorName), First12MonthGas)) + 
-  geom_boxplot(aes(fill = CountyName))
+ggplot(stx_12, aes(factor(TOE_UP_DWN), First12MonthGas)) + 
+  geom_boxplot(aes(fill = TOE_UP_DWN))
 
 ##wellcount by operator
 stx_12 %>%
@@ -127,6 +153,16 @@ stx_12 %>%
   geom_density()
 ##-----------------------------
 count_NA(stx_12)
+
+trainRow <- createDataPartition(stx_12$Cum12Gas_MMcf, p = 0.8, list = FALSE)
+nrow(trainRow)
+
+training_sm <- stx_12[trainRow, ]
+testing_sm <- stx_12[-trainRow, ]
+
+##check the distribution
+table(training_sm$TOE_UP_DWN)
+table(testing_sm$TOE_UP_DWN)
 
 
 mod <- lm(Cum12Gas_MMcf ~ FluidAmountTotal, data = stx_12)
