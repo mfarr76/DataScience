@@ -11,6 +11,7 @@ library(data.table)
 library(purrr)
 library(stringr)
 library(statisticalModeling)
+library(randomForest)
 
 #load("C:/Users/MFARR/Documents/R_files/Spotfire.data/wellheader.RData")
 
@@ -59,10 +60,11 @@ stx <- left_join(stx_chr, stx_num, by = "id")
 stx_sm <- filter(stx, OperatorName == "SM ENERGY COMPANY", 
                  Spacing_Category == "Bounded", 
                  CountyName == "WEBB", 
-                 str_detect(WellName, 'GAL')) 
+                 str_detect(WellName, 'GAL'),
+                 !is.na(First12MonthGas)) 
                   
 ##select only numeric columns and create new data table
-stx_num <- select_if(stx, is.numeric)
+stx_num <- select_if(stx_sm, is.numeric)
 
 correlate <- cor( stx_num, use = "everything" )
 corrplot(correlate, method="circle", type="lower",  sig.level = 0.01, insig = "blank")
@@ -99,12 +101,17 @@ stx_12 <- stx_sm %>%
          Max_Infill_Time < 6 & Max_Infill_Time > -6) %>%
   mutate(Cum12Gas_MMcf = First12MonthGas / 1000, 
          Cum12Oil_Mbo = First12MonthLiquid / 1000, 
-         Cum12_MBoe = Cum12Oil_Mbo + (Cum12Gas_MMcf / 6)) %>%
-  select(OperatorName, TOE_UP_DWN, FluidAmountTotal, ProppantAmountTotal, SoPhiH_LEF, 
-         Spacing_Category, Spacing_Avg, First12MonthGas, First12MonthLiquid,
-         Cum12Gas_MMcf, Cum12Oil_Mbo, Cum12_MBoe)
+         Cum12Mboe = (First12MonthGas / 6 + First12MonthLiquid) / 1000,
+         Median_well = ifelse(First12MonthGas > median(First12MonthGas), 1, 0)) %>%
+  select(TOE_UP_DWN, FluidAmountTotal, ProppantAmountTotal, SoPhiH_LEF, 
+         Spacing_Avg, Cum12Gas_MMcf, Cum12Oil_Mbo, Cum12Mboe, Median_well)
+
+table(stx_12$Median_well)
+
+
 #write.csv(stx_12, file = "stx_12.csv")
 
+glimpse(stx_12)
 
 ##select only numeric columns and create new data table
 stx_cor <- select_if(stx_12, is.numeric)
@@ -164,11 +171,27 @@ testing_sm <- stx_12[-trainRow, ]
 table(training_sm$TOE_UP_DWN)
 table(testing_sm$TOE_UP_DWN)
 
+##caret pre-process data
 
-mod <- lm(Cum12Gas_MMcf ~ FluidAmountTotal, data = stx_12)
-summary(mod)
-out <- evaluate_model(mod, data = stx_12)
-with(data = out, mean((First12MonthGas - model_output)^2, na.rm = TRUE))
+plsFit <- train(Cum12Gas_MMcf ~.,
+                data = training_sm, 
+                method = "pls", 
+                ##Center and scale the predictor for the training
+                ##set and all future samples.
+                preProcess = c("center", "scale"))
+
+plot(plsFit)
+
+model_lm <- lm(Cum12Gas_MMcf ~ SoPhiH_LEF + Spacing_Avg + ProppantAmountTotal + FluidAmountTotal, data = training_sm)
+summary(model_lm)
+
+
+
+
+##fit glm model
+model <- glm(Median_well ~ ., family = "binomial", training_sm)
+summary(model)
+
 
 stx_12$TOE_UP_DWN <- as.factor(stx_12$TOE_UP_DWN)
 rf_train <- stx_12[, c("TOE_UP_DWN", "Cum12Gas_MMcf")]
@@ -180,6 +203,16 @@ rf_1
 varImpPlot(rf_1)
 
 
+
+set.seed(1234)
+rf_2 <- randomForest(Cum12Gas_MMcf ~., data = training_sm, importance = TRUE, ntree = 1000)
+rf_2
+varImpPlot(rf_2)
+
+
+pred_rf_2 <- predict(rf_2, testing_sm)
+error_rf_2 <- pred_rf_2 - testing_sm$Cum12Gas_MMcf
+RMSE_rf_2 <- sqrt(mean(error_rf_2^2, na.rm = TRUE))
 
 
 
