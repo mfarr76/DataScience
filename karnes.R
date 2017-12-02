@@ -223,3 +223,38 @@ karnes_num <- select_if(karnes, is.numeric)
 rp_model <- rpart(CUM12Liquid ~., data = karnes_num, cp = 0.2)
 prp(rp_model, type = 4)
 rpart.plot(rp_model)
+
+##--------------------------------------------------------------------
+
+high_sand_redu <- high_sand %>%
+  select(Cum12Oil_Mbo, LBS_FT_CLEAN)
+  
+manysamples <- high_sand_redu %>%
+  rep_sample_n(size = 50, reps = 100)
+
+manysamples2 <- high_sand_redu %>%
+  rep_sample_n(size = 10, reps = 100)
+
+
+ggplot(manysamples, aes(x = LBS_FT_CLEAN, y = Cum12Oil_Mbo, group = replicate)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+
+ggplot(manysamples2, aes(x = LBS_FT_CLEAN, y = Cum12Oil_Mbo, group = replicate)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+
+
+manylms <- manysamples %>%
+  group_by(replicate) %>%
+  do(lm(Cum12Oil_Mbo ~ LBS_FT_CLEAN, data = .) %>%
+       tidy()) %>%
+  filter(term == "LBS_FT_CLEAN")
+
+ggplot(manylms, aes(x = estimate)) + 
+  geom_density()
+
+
+
+
+

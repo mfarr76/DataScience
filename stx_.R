@@ -26,6 +26,7 @@ stx <- mutate(stx, id = as.factor(1:n()))
 
 ##count NA
 sapply(stx, function(x) sum(is.na(x)))
+sum(is.na(stx))
 
 ##count NA function
 count_NA <- function(x){
@@ -125,8 +126,6 @@ stx_12op <- stx_12 %>%
   group_by(OperatorName) %>%
   summarise_all(mean)
 
-
-
 ggplot(stx_12, aes(OperatorName)) + 
   geom_bar(aes(fill = OperatorName)) +
   theme(legend.position = "none") + 
@@ -161,9 +160,8 @@ stx_12 %>%
 ##-----------------------------
 count_NA(stx_12)
 
+set.seed(1234)
 trainRow <- createDataPartition(stx_12$Cum12Gas_MMcf, p = 0.8, list = FALSE)
-nrow(trainRow)
-
 training_sm <- stx_12[trainRow, ]
 testing_sm <- stx_12[-trainRow, ]
 
@@ -172,7 +170,6 @@ table(training_sm$TOE_UP_DWN)
 table(testing_sm$TOE_UP_DWN)
 
 ##caret pre-process data
-
 plsFit <- train(Cum12Gas_MMcf ~.,
                 data = training_sm, 
                 method = "pls", 
@@ -182,39 +179,7 @@ plsFit <- train(Cum12Gas_MMcf ~.,
 
 plot(plsFit)
 
-model_lm <- lm(Cum12Gas_MMcf ~ SoPhiH_LEF + Spacing_Avg + ProppantAmountTotal + FluidAmountTotal, data = training_sm)
-summary(model_lm)
-
-
-
-
 ##fit glm model
 model <- glm(Median_well ~ ., family = "binomial", training_sm)
 summary(model)
-
-
-stx_12$TOE_UP_DWN <- as.factor(stx_12$TOE_UP_DWN)
-rf_train <- stx_12[, c("TOE_UP_DWN", "Cum12Gas_MMcf")]
-rf_label <- as.factor(stx_12$OperatorName)
-
-set.seed(1234)
-rf_1 <- randomForest(x = rf_train, y = rf_label, importance = TRUE, ntree = 1000)
-rf_1
-varImpPlot(rf_1)
-
-
-
-set.seed(1234)
-rf_2 <- randomForest(Cum12Gas_MMcf ~., data = training_sm, importance = TRUE, ntree = 1000)
-rf_2
-varImpPlot(rf_2)
-
-
-pred_rf_2 <- predict(rf_2, testing_sm)
-error_rf_2 <- pred_rf_2 - testing_sm$Cum12Gas_MMcf
-RMSE_rf_2 <- sqrt(mean(error_rf_2^2, na.rm = TRUE))
-
-
-
-
 
